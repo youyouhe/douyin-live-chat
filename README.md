@@ -21,7 +21,7 @@ python douyin_live_chat.py https://live.douyin.com/42107960039 --duration 60
                                 │
                      Chrome 有头模式(channel="chrome")
                                 │
-              .webcast-chatroom___item + data-index 增量游标
+        .webcast-chatroom___item + MutationObserver 无损捕获
                                 │
                     控制台实时输出 + JSONL 落盘
 ```
@@ -30,7 +30,7 @@ python douyin_live_chat.py https://live.douyin.com/42107960039 --duration 60
 
 - **抖音检测 headless**——必须 `headless=False` 且用本机真 Chrome（`channel="chrome"`），无头模式弹幕区永远不渲染
 - `goto` 必须 `wait_until="domcontentloaded"`——直播页的 load 事件被推流挂起
-- 弹幕条目锚点是 `.webcast-chatroom___item`（BEM 命名不参与混淆），父节点 `data-index` 是天然增量游标（React 列表序号，连续、不重、不漏）
+- 弹幕条目锚点是 `.webcast-chatroom___item`（BEM 命名不参与混淆），`data-index` 为条目序号；**文本是延迟填充的**（React 先挂占位后填数据），因此采集用 MutationObserver 覆盖式 Map 而非轮询游标（后者实测丢 74.8%）
 - 直播间元数据白送：`window.__STORE__.roomStore.roomInfo`（roomId / webRid / 直播状态）
 - 三类消息混在同一条目流，按特征零成本分类：礼物（`送出了 X × N`）、弹幕（正文）、进场欢迎（昵称后跟空 content）
 
@@ -87,7 +87,7 @@ python douyin_live_chat.py <URL或webRid> [选项]
 
 ## 已知限制
 
-- 虚拟列表有渲染上限——超高频房间（弹幕刷屏级）DOM 只保留最近条目，极端场景可能漏弹；对全量有刚需需走 WebSocket 逆向（protobuf + signature 轮换，不在本工具范围）
+- **采集为无损设计**：页面内常驻 MutationObserver（覆盖式 Map），弹幕节点文本一填充即入账。早期游标轮询方案曾实测丢失 74.8%（React 占位节点先空挂载后填文本，游标被空条推进后不再回采），已修复。仅剩理论边界：极端刷屏速率下节点从挂载到滑出渲染窗口始终未出现非空文本的条目无法捕获；对全量有刚需需走 WebSocket 逆向（protobuf + signature 轮换，不在本工具范围）
 - 直播结束/场次切换时页面状态异常，脚本会给出提示退出
 - 频繁冷启动同一 cookie 可能触发风控，请控制采集频率并尊重平台
 

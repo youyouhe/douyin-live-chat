@@ -101,21 +101,33 @@ def import_cookies_txt(txt_path: Path, domain_filter: str = "douyin.com",
 
 
 # ---------------- 2. Playwright 执行面 ----------------
-POLL_JS = """
-() => {
-  const out = [];
-  let cursor = window.__chatCursor ?? -1;
-  for (const it of document.querySelectorAll('.webcast-chatroom___item')) {
-    const idxEl = it.closest('[data-index]');
-    const idx = idxEl ? +idxEl.dataset.index : -1;
-    if (idx <= cursor) continue;
-    cursor = idx;
-    out.push({idx, text: (it.innerText || '').replace(/\\s+/g, ' ').trim()});
-  }
-  window.__chatCursor = cursor;
-  return out;
+INSTALL_OBSERVER_JS = r"""
+() => {                                   // 修复丢弹幕: 占位节点先空后填文本,
+  if (window.__obsInstalled) return;      // 游标法会对空条推进cursor导致漏采(实测丢74.8%)
+  window.__obsMap = {};                   // 改为 MutationObserver 覆盖式Map: 文本一填充即入账
+  const scanAll = () => {
+    for (const it of document.querySelectorAll('.webcast-chatroom___item')) {
+      const idxEl = it.closest('[data-index]');
+      const idx = idxEl ? +idxEl.dataset.index : -1;
+      if (idx < 0) continue;
+      const text = (it.innerText || '').replace(/\s+/g, ' ').trim();
+      if (text) window.__obsMap[idx] = text;
+    }
+  };
+  const chat = document.querySelector('[class*=webcast-chatroom], [class*=webcast-chat]');
+  if (!chat) return;
+  new MutationObserver(() => scanAll())
+    .observe(chat, {childList: true, subtree: true, characterData: true});
+  scanAll();
+  window.__obsInstalled = true;
 }
 """
+
+READ_OBS_JS = r"""() => { const m = window.__obsMap || {}; const out = [];
+  if (!window.__obsReadSet) window.__obsReadSet = new Set();
+  for (const k of Object.keys(m)) { const i = +k;
+    if (!window.__obsReadSet.has(i)) { window.__obsReadSet.add(i); out.push({idx: i, text: m[k]}); } }
+  return out; }"""
 
 
 def run_live(url: str, duration: int, out_file: Path, state_file: Path) -> None:
@@ -140,6 +152,7 @@ def run_live(url: str, duration: int, out_file: Path, state_file: Path) -> None:
                   f"风控。重跑加 --cookie-ttl-hours 0 强制刷新 cookie")
             browser.close()
             return
+        page.evaluate(INSTALL_OBSERVER_JS)     # 装无损采集器
         # 直播间元数据
         try:
             meta = page.evaluate("""() => { const s = window.__STORE__?.roomStore || {};
@@ -154,7 +167,7 @@ def run_live(url: str, duration: int, out_file: Path, state_file: Path) -> None:
         seen = 0
         try:
             while time.time() < deadline:
-                for item in page.evaluate(POLL_JS) or []:
+                for item in page.evaluate(READ_OBS_JS) or []:
                     text = (item["text"] or "").strip()
                     if not text:
                         continue                              # 动画占位/空白节点
