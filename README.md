@@ -47,7 +47,7 @@ python -m playwright install chromium   # 或直接用本机 Chrome, 见下
 
 弹幕区需要登录态。脚本把 cookie 缓存为 Playwright storageState 格式（默认 `~/.douyin-live-state.json`）。
 
-### 方式 A：浏览器插件导出（推荐，零手动编辑）
+### 浏览器插件导出（推荐，零手动编辑）
 
 1. Chrome 应用商店安装 **[Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)**（或同类 cookies.txt 导出插件）
 2. 打开 `https://live.douyin.com/` 并确认已登录
@@ -58,17 +58,7 @@ python -m playwright install chromium   # 或直接用本机 Chrome, 见下
 python douyin_live_chat.py <直播间URL> --cookies-txt ~/Downloads/cookies.txt
 ```
 
-脚本自动解析 Netscape 格式、过滤 `douyin.com` 域、转换注入——无需任何手动编辑。
-
-### 方式 B：bsk 自动导出（进阶，可选）
-
-[BrowserSkill (bsk)](https://github.com/Tencent/BrowserSkill) 驱动你日常登录着的 Chrome 自动导出，可定时刷新、无需人工点击：
-
-```bash
-python douyin_live_chat.py <直播间URL>            # 首跑自动导出并缓存, 6h 过期自动刷新
-```
-
-> 注：依赖 bsk 的 `cookies` 子命令（功能已提交上游 [PR #393](https://github.com/Tencent/BrowserSkill/pull/393)，合并前需自行编译含补丁的版本）。日常使用方式 A 更简单。
+脚本自动解析 Netscape 格式、过滤 `douyin.com` 域、转换注入——无需任何手动编辑。cookie 缓存于 `~/.douyin-live-state.json`，重复运行可省略 `--cookies-txt`。
 
 ## 用法
 
@@ -80,7 +70,7 @@ python douyin_live_chat.py <URL或webRid> [选项]
   --out FILE           JSONL 输出文件, 默认 chat.jsonl
   --cookie-ttl-hours H cookie 缓存时效, 默认 6; 0 = 强制重新导出
   --cookies-txt FILE   Netscape cookies.txt(插件导出), 自动转换注入 ← 推荐
-  --no-bsk             不走 bsk, 直接用现有 cookie 文件
+  --no-bsk             直接使用已有 cookie 缓存, 不重新获取
   --state-file FILE    指定 storageState 路径
 ```
 
