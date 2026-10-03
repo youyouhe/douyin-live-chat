@@ -43,38 +43,32 @@ python -m playwright install chromium   # 或直接用本机 Chrome, 见下
 
 需要本机安装 Chrome（脚本用 `channel="chrome"` 走真实 Chrome 而非 Chromium）。
 
-## 获取登录 Cookie（二选一）
+## 获取登录 Cookie（推荐插件方式）
 
 弹幕区需要登录态。脚本把 cookie 缓存为 Playwright storageState 格式（默认 `~/.douyin-live-state.json`）。
 
-### 方式 A：bsk 自动导出（推荐）
+### 方式 A：浏览器插件导出（推荐，零手动编辑）
 
-[BrowserSkill (bsk)](https://github.com/Tencent/BrowserSkill) 驱动你日常登录着的 Chrome 自动导出全量 cookie（含 httpOnly）：
+1. Chrome 应用商店安装 **[Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)**（或同类 cookies.txt 导出插件）
+2. 打开 `https://live.douyin.com/` 并确认已登录
+3. 点插件图标导出 `cookies.txt`
+4. 一条命令直接用：
 
 ```bash
-# 需要 bsk 带 cookies 子命令(功能已提交上游 PR, 合并前可用含补丁的 fork 自行编译)
+python douyin_live_chat.py <直播间URL> --cookies-txt ~/Downloads/cookies.txt
+```
+
+脚本自动解析 Netscape 格式、过滤 `douyin.com` 域、转换注入——无需任何手动编辑。
+
+### 方式 B：bsk 自动导出（进阶，可选）
+
+[BrowserSkill (bsk)](https://github.com/Tencent/BrowserSkill) 驱动你日常登录着的 Chrome 自动导出，可定时刷新、无需人工点击：
+
+```bash
 python douyin_live_chat.py <直播间URL>            # 首跑自动导出并缓存, 6h 过期自动刷新
 ```
 
-### 方式 B：手动导出
-
-Chrome 打开 `https://live.douyin.com/`（确认已登录）→ F12 → Application → Cookies → 把 `douyin.com` 域的条目整理成下面的格式存为 `state.json`：
-
-```json
-{
-  "cookies": [
-    {"name": "sessionid", "value": "xxx", "domain": ".douyin.com",
-     "path": "/", "secure": true, "httpOnly": true},
-    {"name": "ttwid", "value": "xxx", "domain": ".douyin.com",
-     "path": "/", "secure": false, "httpOnly": false}
-  ],
-  "origins": []
-}
-```
-
-```bash
-python douyin_live_chat.py <直播间URL> --no-bsk --state-file state.json
-```
+> 注：依赖 bsk 的 `cookies` 子命令（功能已提交上游 [PR #393](https://github.com/Tencent/BrowserSkill/pull/393)，合并前需自行编译含补丁的版本）。日常使用方式 A 更简单。
 
 ## 用法
 
@@ -85,8 +79,9 @@ python douyin_live_chat.py <URL或webRid> [选项]
   --duration N         采集秒数, 默认 60; 0 = 持续采集直到 Ctrl+C
   --out FILE           JSONL 输出文件, 默认 chat.jsonl
   --cookie-ttl-hours H cookie 缓存时效, 默认 6; 0 = 强制重新导出
+  --cookies-txt FILE   Netscape cookies.txt(插件导出), 自动转换注入 ← 推荐
   --no-bsk             不走 bsk, 直接用现有 cookie 文件
-  --state-file FILE    指定 storageState 路径(手动导出场景)
+  --state-file FILE    指定 storageState 路径
 ```
 
 ## 输出格式

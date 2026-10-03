@@ -64,6 +64,42 @@ def ensure_state(url: str, ttl_hours: float) -> Path:
     return refresh_cookies(url)
 
 
+# ---------------- 1b. Netscape cookies.txt 兼容(浏览器插件导出) ----------------
+def import_cookies_txt(txt_path: Path, domain_filter: str = "douyin.com",
+                       state_path: Path = DEFAULT_STATE) -> Path:
+    """解析 'Get cookies.txt LOCALLY' 等插件导出的 Netscape 格式,
+    过滤出 domain_filter 域的条目, 转 storageState 落盘。"""
+    cookies = []
+    for line in txt_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") and not line.startswith("#HttpOnly_"):
+            continue
+        http_only = line.startswith("#HttpOnly_")
+        if http_only:
+            line = line[len("#HttpOnly_"):]
+        parts = line.split("	")
+        if len(parts) != 7:
+            continue
+        domain, _flag, path, secure, expiry, name, value = parts
+        if domain_filter not in domain:
+            continue                                  # 全量导出只留目标域
+        ck = {"name": name, "value": value, "domain": domain, "path": path or "/",
+              "secure": secure.upper() == "TRUE", "httpOnly": http_only}
+        try:
+            exp = int(float(expiry))
+            if exp > 0:
+                ck["expires"] = exp
+        except ValueError:
+            pass
+        cookies.append(ck)
+    if not cookies:
+        raise RuntimeError(f"{txt_path} 中未找到 {domain_filter} 域的 cookie")
+    state_path.write_text(json.dumps({"cookies": cookies, "origins": []},
+                                     ensure_ascii=False), encoding="utf-8")
+    print(f"[cookie] cookies.txt 导入 {len(cookies)} 条({domain_filter} 域) → {state_path}")
+    return state_path
+
+
 # ---------------- 2. Playwright 执行面 ----------------
 POLL_JS = """
 () => {
@@ -154,11 +190,15 @@ def main() -> int:
                     help="不刷新 cookie, 直接用现有缓存(测试用)")
     ap.add_argument("--state-file", type=Path, default=DEFAULT_STATE,
                     help="storageState 文件路径(可手动放置, 见 README)")
+    ap.add_argument("--cookies-txt", type=Path, default=None,
+                    help="Netscape cookies.txt(浏览器插件导出), 自动转换并使用")
     a = ap.parse_args()
     url = a.target if a.target.startswith("http") else f"https://live.douyin.com/{a.target}"
-    if not a.no_bsk:
+    if a.cookies_txt:
+        import_cookies_txt(a.cookies_txt, state_path=a.state_file)
+    elif not a.no_bsk:
         ensure_state(url, a.cookie_ttl_hours)
-    elif not args.state_file.exists():
+    elif not a.state_file.exists():
         sys.exit("无 cookie 缓存, 先不带 --no-bsk 跑一次")
     run_live(url, a.duration, Path(a.out), a.state_file)
     return 0
